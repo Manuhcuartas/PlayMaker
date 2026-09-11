@@ -1,14 +1,11 @@
 package com.playmaker.ingestion.application.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playmaker.common.events.PlayRecordedEvent;
 import com.playmaker.ingestion.application.port.in.IngestPlayUseCase;
 import com.playmaker.ingestion.application.port.in.RecordPlayCommand;
+import com.playmaker.ingestion.application.port.out.EventPublisherPort;
 import com.playmaker.ingestion.application.port.out.GamePlayRepositoryPort;
-import com.playmaker.ingestion.application.port.out.OutboxRepositoryPort;
 import com.playmaker.ingestion.domain.model.GamePlay;
-import com.playmaker.ingestion.domain.model.OutboxEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,15 +15,12 @@ import java.util.UUID;
 public class PlayIngestionService implements IngestPlayUseCase {
 
     private final GamePlayRepositoryPort gamePlayRepositoryPort;
-    private final OutboxRepositoryPort outboxRepositoryPort;
-    private final ObjectMapper objectMapper;
+    private final EventPublisherPort eventPublisherPort;
 
     public PlayIngestionService(GamePlayRepositoryPort gamePlayRepositoryPort,
-                                OutboxRepositoryPort outboxRepositoryPort,
-                                ObjectMapper objectMapper) {
+                                EventPublisherPort eventPublisherPort) {
         this.gamePlayRepositoryPort = gamePlayRepositoryPort;
-        this.outboxRepositoryPort = outboxRepositoryPort;
-        this.objectMapper = objectMapper;
+        this.eventPublisherPort = eventPublisherPort;
     }
 
     @Override
@@ -55,18 +49,7 @@ public class PlayIngestionService implements IngestPlayUseCase {
                 savedPlay.getCreatedAt()
         );
 
-        try {
-            String payload = objectMapper.writeValueAsString(event);
-            OutboxEvent outbox = OutboxEvent.create(
-                    "GAME",
-                    savedPlay.getGameId().toString(),
-                    "PlayRecorded",
-                    payload
-            );
-            outboxRepositoryPort.save(outbox);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize outbox payload", e);
-        }
+        eventPublisherPort.publish(event);
 
         return savedPlay;
     }
